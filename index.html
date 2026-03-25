@@ -258,6 +258,45 @@
         overflow-y: auto;
         padding-right: 6px; /* chừa chỗ scrollbar */
       }
+
+      /* Link input styling */
+      .link-input {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 2px solid #4facfe;
+        font-size: 13px;
+        transition: all 0.3s;
+        resize: vertical;
+        min-height: 38px;
+        font-family: inherit;
+      }
+      .link-input:focus {
+        outline: none;
+        border-color: #2f8cff;
+        box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+      }
+      .link-input:disabled {
+        border-color: #ddd;
+        background: #f5f5f5;
+      }
+      .link-btn {
+        margin-top: 6px;
+        width: 100%;
+        background: #f0f8ff;
+        color: #4facfe;
+        border: 1px solid #4facfe;
+      }
+      .link-btn:hover:not(:disabled) {
+        background: #4facfe;
+        color: white;
+      }
+      .link-btn:disabled {
+        background: #f5f5f5;
+        color: #999;
+        border-color: #ddd;
+        cursor: not-allowed;
+      }
     </style>
   </head>
 
@@ -266,30 +305,53 @@
       <h2>Clone Files từ Shared Drive → My Drive</h2>
 
       <div class="row">
-        <button id="loginBtn" class="primary" onclick="login()" disabled>
-          ⏳ Đang tải...
-        </button>
+        <button class="primary" onclick="login()">🔐 Đăng nhập Google</button>
         <span id="who" class="muted"></span>
-      </div>
-
-      <div
-        style="
-          margin-top: 8px;
-          padding: 8px 12px;
-          background: #fff3cd;
-          border-radius: 6px;
-          font-size: 12px;
-          color: #856404;
-        "
-      >
-        ⚠️ <b>Lưu ý:</b> Nếu bị crash khi đăng nhập, vui lòng dùng
-        <b>Chrome</b>, <b>Edge</b> hoặc <b>Firefox</b>. Trình duyệt Cốc Cốc có
-        thể không tương thích với Google API mới.
       </div>
 
       <div class="split">
         <div class="panel">
-          <h3>Shared Drive / Folder nguồn</h3>
+          <h3>Folder nguồn (Shared/My Drive)</h3>
+
+          <div style="margin-bottom: 10px">
+            <textarea
+              id="sourceLinkInput"
+              class="link-input"
+              placeholder="🔗 Paste link folder nguồn (mỗi link 1 dòng):
+https://drive.google.com/drive/folders/abc123...
+https://drive.google.com/drive/folders/xyz789...
+(có thể paste nhiều link cùng lúc)"
+              rows="4"
+              disabled
+            ></textarea>
+            <button
+              onclick="loadFromSourceLinks()"
+              class="link-btn"
+              id="loadSourceBtn"
+              disabled
+            >
+              📥 Load từ link(s)
+            </button>
+            <div
+              id="loadedFoldersInfo"
+              class="muted"
+              style="margin-top: 6px; display: none"
+            >
+              ✅ Đã load <b id="loadedFolderCount">0</b> folders
+            </div>
+          </div>
+
+          <div
+            style="
+              text-align: center;
+              margin: 10px 0;
+              color: #999;
+              font-size: 12px;
+            "
+          >
+            ── hoặc browse ──
+          </div>
+
           <div id="breadcrumb" class="breadcrumb">My Drive</div>
           <input
             id="folderSearch"
@@ -299,23 +361,48 @@
             disabled
           />
           <div class="muted">
-            Folder nguồn (sẽ clone): <b id="sourceFolder">Chưa chọn</b>
-          </div>
-          <div class="muted" style="margin-bottom: 8px">
-            📁 <b id="sourceFolderCount">0</b> folders | 📄
-            <b id="fileCount">0</b> files
+            Folder nguồn: <b id="chosenFolder">Chưa chọn</b>
           </div>
           <div id="folderList" class="list"></div>
+          <div class="muted" style="margin-top: 10px">
+            Files trong folder: <b id="fileCount">0</b>
+          </div>
 
-          <div
-            id="filePreviewList"
-            class="preview"
-            style="margin-top: 8px"
-          ></div>
+          <div id="assetList" class="preview" style="margin-top: 8px"></div>
         </div>
 
         <div class="panel">
           <h3>Folder đích (My Drive)</h3>
+
+          <div style="margin-bottom: 10px">
+            <input
+              id="destLinkInput"
+              type="text"
+              class="link-input"
+              placeholder="🔗 Paste link folder đích (VD: https://drive.google.com/drive/folders/xyz789...)"
+              disabled
+            />
+            <button
+              onclick="loadFromDestLink()"
+              class="link-btn"
+              id="loadDestBtn"
+              disabled
+            >
+              📥 Load từ link
+            </button>
+          </div>
+
+          <div
+            style="
+              text-align: center;
+              margin: 10px 0;
+              color: #999;
+              font-size: 12px;
+            "
+          >
+            ── hoặc browse ──
+          </div>
+
           <div id="destBreadcrumb" class="breadcrumb">My Drive</div>
           <input
             id="destFolderSearch"
@@ -325,9 +412,6 @@
             disabled
           />
           <div class="muted">Folder đích: <b id="destFolder">Chưa chọn</b></div>
-          <div class="muted" style="margin-bottom: 8px">
-            📁 <b id="destFolderCount">0</b> folders trong My Drive
-          </div>
           <div id="destFolderList" class="list"></div>
 
           <button
@@ -361,147 +445,313 @@
         "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
 
       let accessToken = null;
+      let currentFolderId = "root";
+      let folderStack = [{ id: "root", name: "My Drive" }];
+      let allFolders = [];
+      let folderId = null; // Source folder
+      let driveAssets = []; // Files trong folder nguồn
 
-      // Source folder (shared drive / any folder)
-      let sourceFolderId = null;
-      let sourceFolderStack = [{ id: "root", name: "My Drive" }];
-      let sourceAllFolders = [];
-      let sourceFiles = [];
-
-      // Destination folder (My Drive)
-      let destFolderId = null;
+      // Destination folder variables
+      let destCurrentFolderId = "root";
       let destFolderStack = [{ id: "root", name: "My Drive" }];
       let destAllFolders = [];
+      let destFolderId = null;
 
       function initGapi() {
-        return new Promise((resolve, reject) => {
-          try {
-            if (typeof gapi === "undefined") {
-              reject(
-                new Error("Google API chưa load. Vui lòng refresh trang."),
-              );
-              return;
-            }
-            gapi.load("client", async () => {
-              try {
-                await gapi.client.init({
-                  apiKey: API_KEY,
-                  discoveryDocs: [DISCOVERY],
-                });
-                resolve();
-              } catch (error) {
-                reject(error);
-              }
+        return new Promise((resolve) => {
+          gapi.load("client", async () => {
+            await gapi.client.init({
+              apiKey: API_KEY,
+              discoveryDocs: [DISCOVERY],
             });
-          } catch (error) {
-            reject(error);
-          }
+            resolve();
+          });
         });
       }
 
       function login() {
-        try {
-          // Kiểm tra xem Google API đã load chưa
-          if (typeof google === "undefined" || !google.accounts) {
-            alert(
-              "⚠️ Google API chưa sẵn sàng. Vui lòng:\n1. Kiểm tra kết nối internet\n2. Refresh lại trang\n3. Thử trình duyệt khác (Chrome, Edge, Firefox)\n\nLưu ý: Cốc Cốc có thể chặn Google API.",
-            );
+        const tc = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: async (t) => {
+            accessToken = t.access_token;
+            await initGapi();
+            gapi.client.setToken({ access_token: accessToken });
+            document.getElementById("who").textContent =
+              "✅ Đã kết nối Google Drive";
+
+            // Enable all inputs
+            document.getElementById("folderSearch").disabled = false;
+            document.getElementById("destFolderSearch").disabled = false;
+            document.getElementById("sourceLinkInput").disabled = false;
+            document.getElementById("destLinkInput").disabled = false;
+            document.getElementById("loadSourceBtn").disabled = false;
+            document.getElementById("loadDestBtn").disabled = false;
+
+            folderStack = [{ id: "root", name: "My Drive" }];
+            destFolderStack = [{ id: "root", name: "My Drive" }];
+            folderId = null;
+            destFolderId = null;
+            await loadFolders("root");
+            await loadDestFolders("root");
+          },
+        });
+        tc.requestAccessToken();
+      }
+
+      // Extract folder ID from Google Drive link
+      function extractFolderId(url) {
+        if (!url) return null;
+
+        // Remove whitespace
+        url = url.trim();
+
+        // If it's already just an ID (no http/https), return it
+        if (!url.includes("http") && !url.includes("/")) {
+          return url;
+        }
+
+        // Match patterns like:
+        // https://drive.google.com/drive/folders/FOLDER_ID
+        // https://drive.google.com/drive/u/0/folders/FOLDER_ID
+        // https://drive.google.com/drive/folders/FOLDER_ID?usp=sharing
+        const patterns = [/\/folders\/([a-zA-Z0-9_-]+)/, /id=([a-zA-Z0-9_-]+)/];
+
+        for (const pattern of patterns) {
+          const match = url.match(pattern);
+          if (match && match[1]) {
+            return match[1];
+          }
+        }
+
+        return null;
+      }
+
+      async function loadFromSourceLinks() {
+        const input = document.getElementById("sourceLinkInput");
+        const text = input.value.trim();
+
+        if (!text) {
+          alert("Vui lòng nhập link folder!");
+          return;
+        }
+
+        // Split by lines and filter empty lines
+        const lines = text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line);
+
+        if (lines.length === 0) {
+          alert("Vui lòng nhập ít nhất 1 link!");
+          return;
+        }
+
+        const folderIds = [];
+        const invalidLines = [];
+
+        // Extract folder IDs from all lines
+        lines.forEach((line, index) => {
+          const folderId = extractFolderId(line);
+          if (folderId) {
+            folderIds.push(folderId);
+          } else {
+            invalidLines.push(`Dòng ${index + 1}: ${line.substring(0, 50)}...`);
+          }
+        });
+
+        if (folderIds.length === 0) {
+          alert(
+            "Không có link hợp lệ nào!\n\nVui lòng dùng link dạng:\nhttps://drive.google.com/drive/folders/FOLDER_ID",
+          );
+          return;
+        }
+
+        if (invalidLines.length > 0) {
+          const confirmMsg = `Có ${invalidLines.length} link không hợp lệ:\n${invalidLines.slice(0, 3).join("\n")}${invalidLines.length > 3 ? "\n..." : ""}\n\nTiếp tục load ${folderIds.length} link hợp lệ?`;
+          if (!confirm(confirmMsg)) {
             return;
           }
+        }
 
-          const tc = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: async (t) => {
-              try {
-                if (t.error) {
-                  document.getElementById("status").textContent =
-                    "❌ Lỗi: " + (t.error_description || t.error);
-                  return;
-                }
+        try {
+          document.getElementById("status").textContent =
+            `Đang load ${folderIds.length} folders...`;
 
-                accessToken = t.access_token;
-                await initGapi();
-                gapi.client.setToken({ access_token: accessToken });
-                document.getElementById("who").textContent =
-                  "✅ Đã kết nối Google Drive";
-                document.getElementById("folderSearch").disabled = false;
-                document.getElementById("destFolderSearch").disabled = false;
+          // Reset progress bar
+          progressBar.style.width = "0%";
+          progressBar.textContent = "0%";
 
-                // Load source folders
-                await loadSourceFolders("root");
-                // Load destination folders
-                await loadDestFolders("root");
-              } catch (error) {
-                console.error("Login callback error:", error);
-                document.getElementById("status").textContent =
-                  "❌ Lỗi kết nối: " + error.message;
-              }
-            },
-            error_callback: (error) => {
-              console.error("OAuth error:", error);
+          // Clear previous data
+          driveAssets = [];
+          const loadedFolders = [];
+          let successCount = 0;
+          let errorCount = 0;
+
+          // Load all folders
+          for (let i = 0; i < folderIds.length; i++) {
+            const folderId = folderIds[i];
+
+            try {
               document.getElementById("status").textContent =
-                "❌ Lỗi đăng nhập: " +
-                (error.message || error.type || "Unknown error");
-            },
-          });
+                `Đang load folder ${i + 1}/${folderIds.length}...`;
 
-          tc.requestAccessToken({ prompt: "" });
+              // Update progress bar
+              const percent = Math.round(((i + 1) / folderIds.length) * 100);
+              progressBar.style.width = percent + "%";
+              progressBar.textContent = percent + "%";
+
+              // Get folder info
+              const folderInfo = await gapi.client.drive.files.get({
+                fileId: folderId,
+                fields: "id,name,mimeType",
+                supportsAllDrives: true,
+              });
+
+              if (
+                folderInfo.result.mimeType !==
+                "application/vnd.google-apps.folder"
+              ) {
+                console.warn(`${folderId} không phải là folder, bỏ qua`);
+                errorCount++;
+                continue;
+              }
+
+              loadedFolders.push({
+                id: folderId,
+                name: folderInfo.result.name,
+              });
+
+              // Load files from this folder
+              let pageToken = null;
+              do {
+                const res = await gapi.client.drive.files.list({
+                  q: `trashed=false and '${folderId}' in parents`,
+                  fields:
+                    "nextPageToken, files(id,name,mimeType,thumbnailLink,iconLink,size)",
+                  pageSize: 1000,
+                  pageToken,
+                  supportsAllDrives: true,
+                  includeItemsFromAllDrives: true,
+                });
+
+                (res.result.files || []).forEach((f) => {
+                  if (f.mimeType !== "application/vnd.google-apps.folder") {
+                    // Add folder name to file for reference
+                    f.sourceFolder = folderInfo.result.name;
+                    driveAssets.push(f);
+                  }
+                });
+
+                pageToken = res.result.nextPageToken;
+              } while (pageToken);
+
+              successCount++;
+            } catch (error) {
+              console.error(`Error loading folder ${folderId}:`, error);
+              errorCount++;
+            }
+          }
+
+          // Update UI
+          if (successCount > 0) {
+            // Mark as selected (for clone operation)
+            folderId = "multi-folder-mode"; // Special marker
+            folderStack = loadedFolders;
+
+            document.getElementById("chosenFolder").textContent =
+              `${successCount} folders (${driveAssets.length} files)`;
+
+            document.getElementById("fileCount").textContent =
+              driveAssets.length;
+            document.getElementById("loadedFolderCount").textContent =
+              successCount;
+            document.getElementById("loadedFoldersInfo").style.display =
+              "block";
+
+            renderAssets();
+
+            const statusMsg =
+              errorCount > 0
+                ? `✅ Load xong ${successCount}/${folderIds.length} folders (${driveAssets.length} files). ${errorCount} lỗi.`
+                : `✅ Load xong ${successCount} folders (${driveAssets.length} files)`;
+
+            document.getElementById("status").textContent = statusMsg;
+          } else {
+            alert(
+              "Không load được folder nào! Kiểm tra:\n1. Link có đúng không?\n2. Bạn có quyền truy cập không?",
+            );
+            document.getElementById("status").textContent =
+              "❌ Không load được folder nào";
+          }
         } catch (error) {
-          console.error("Login error:", error);
-          alert(
-            "❌ Lỗi khi đăng nhập:\n" +
-              error.message +
-              "\n\nĐề xuất:\n- Thử trình duyệt Chrome hoặc Edge\n- Kiểm tra popup không bị chặn\n- Clear cache và thử lại",
-          );
+          console.error("Error loading folders:", error);
+          alert("Lỗi khi load folders!");
+          document.getElementById("status").textContent = "❌ Lỗi load folders";
         }
       }
 
-      // Kiểm tra Google API load status
-      function checkApiReady() {
-        const loginBtn = document.getElementById("loginBtn");
-        const statusEl = document.getElementById("status");
+      async function loadFromDestLink() {
+        const input = document.getElementById("destLinkInput");
+        const url = input.value.trim();
 
-        let checkCount = 0;
-        const maxChecks = 20; // 10 giây
+        if (!url) {
+          alert("Vui lòng nhập link folder!");
+          return;
+        }
 
-        const checkInterval = setInterval(() => {
-          checkCount++;
+        const folderId = extractFolderId(url);
+
+        if (!folderId) {
+          alert(
+            "Link không hợp lệ! Vui lòng dùng link dạng:\nhttps://drive.google.com/drive/folders/FOLDER_ID",
+          );
+          return;
+        }
+
+        try {
+          document.getElementById("status").textContent =
+            "Đang load folder đích từ link...";
+
+          // Get folder info
+          const folderInfo = await gapi.client.drive.files.get({
+            fileId: folderId,
+            fields: "id,name,mimeType",
+            supportsAllDrives: false,
+          });
 
           if (
-            typeof google !== "undefined" &&
-            google.accounts &&
-            typeof gapi !== "undefined"
+            folderInfo.result.mimeType !== "application/vnd.google-apps.folder"
           ) {
-            clearInterval(checkInterval);
-            loginBtn.disabled = false;
-            loginBtn.textContent = "🔐 Đăng nhập Google";
-            if (statusEl) statusEl.textContent = "✅ Sẵn sàng đăng nhập";
-          } else if (checkCount >= maxChecks) {
-            clearInterval(checkInterval);
-            loginBtn.disabled = false;
-            loginBtn.textContent = "⚠️ Thử đăng nhập";
-            if (statusEl)
-              statusEl.textContent =
-                "⚠️ API tải chậm. Nếu crash, vui lòng dùng Chrome/Edge.";
+            alert("Link này không phải là folder!");
+            return;
           }
-        }, 500);
+
+          // Reset folder stack and load this folder
+          destFolderStack = [{ id: folderId, name: folderInfo.result.name }];
+          await loadDestFolders(folderId);
+
+          // Auto select this folder
+          destCurrentFolderId = folderId;
+          selectDestFolder();
+
+          document.getElementById("status").textContent =
+            `✅ Đã load folder đích: ${folderInfo.result.name}`;
+        } catch (error) {
+          console.error("Error loading dest folder:", error);
+          alert(
+            "Lỗi khi load folder đích! Kiểm tra:\n1. Link có đúng không?\n2. Bạn có quyền truy cập folder không?\n3. Folder phải trong My Drive",
+          );
+          document.getElementById("status").textContent =
+            "❌ Lỗi load folder đích từ link";
+        }
       }
 
-      // Chạy kiểm tra khi trang load xong
-      window.addEventListener("load", checkApiReady);
-
-      async function loadSourceFolders(parentId) {
-        const currentFolderId = parentId;
-        sourceAllFolders = [];
-        sourceFiles = [];
+      async function loadFolders(parentId) {
+        currentFolderId = parentId;
+        allFolders = [];
+        driveAssets = [];
         let pageToken = null;
-
-        // Show loading state
-        document.getElementById("folderList").innerHTML =
-          '<div class="item" style="pointer-events: none;"><div class="icon">⏳</div>Đang tải folders...</div>';
-        document.getElementById("status").textContent =
-          "Đang tải danh sách folders...";
 
         do {
           const res = await gapi.client.drive.files.list({
@@ -510,7 +760,7 @@
                 ? "trashed=false"
                 : `trashed=false and '${parentId}' in parents`,
             fields:
-              "nextPageToken, files(id,name,mimeType,thumbnailLink,iconLink,size,webViewLink)",
+              "nextPageToken, files(id,name,mimeType,thumbnailLink,iconLink,size)",
             pageSize: 1000,
             pageToken,
             supportsAllDrives: true,
@@ -519,30 +769,24 @@
 
           (res.result.files || []).forEach((f) => {
             if (f.mimeType === "application/vnd.google-apps.folder") {
-              sourceAllFolders.push(f);
+              allFolders.push(f);
             } else {
-              sourceFiles.push(f);
+              // Lấy tất cả files, không chỉ ảnh
+              driveAssets.push(f);
             }
           });
 
           pageToken = res.result.nextPageToken;
         } while (pageToken);
 
-        sourceFolderStack[sourceFolderStack.length - 1].id = currentFolderId;
         renderFolders();
-        renderFilePreview();
-        document.getElementById("status").textContent =
-          `✅ Đã tải ${sourceAllFolders.length} folders và ${sourceFiles.length} files`;
+        renderAssets();
       }
 
       async function loadDestFolders(parentId) {
-        const currentFolderId = parentId;
+        destCurrentFolderId = parentId;
         destAllFolders = [];
         let pageToken = null;
-
-        // Show loading state
-        document.getElementById("destFolderList").innerHTML =
-          '<div class="item" style="pointer-events: none;"><div class="icon">⏳</div>Đang tải folders...</div>';
 
         do {
           const res = await gapi.client.drive.files.list({
@@ -556,103 +800,75 @@
             supportsAllDrives: false, // Only My Drive for destination
           });
 
-          destAllFolders = res.result.files || [];
+          destAllFolders = destAllFolders.concat(res.result.files || []);
           pageToken = res.result.nextPageToken;
         } while (pageToken);
 
-        destFolderStack[destFolderStack.length - 1].id = currentFolderId;
         renderDestFolders();
+      }
+
+      async function deleteDriveFile(fileId) {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+          method: "DELETE",
+          headers: { Authorization: "Bearer " + accessToken },
+        });
       }
 
       function renderFolders() {
         const list = document.getElementById("folderList");
-        const searchInput = document.getElementById("folderSearch");
-        const keyword = (searchInput?.value || "").toLowerCase().trim();
-
-        // Filter folders
-        const filteredFolders = keyword
-          ? sourceAllFolders.filter((f) =>
-              f.name.toLowerCase().includes(keyword),
-            )
-          : sourceAllFolders;
-
+        const keyword = folderSearch.value.toLowerCase();
         list.innerHTML = "";
 
-        if (sourceFolderStack.length > 1) {
-          list.innerHTML += `<div class="item" onclick="goUpSource()"><div class="icon">↩</div>Quay lại</div>`;
-        }
+        if (folderStack.length > 1)
+          list.innerHTML += `<div class="item" onclick="goUp()"><div class="icon">↩</div>Quay lại</div>`;
 
         list.innerHTML += `<div class="item ${
-          sourceFolderId === sourceFolderStack.at(-1).id ? "active" : ""
-        }" onclick="selectSourceFolder()">📌 Chọn folder này làm nguồn</div>`;
+          folderId === currentFolderId ? "active" : ""
+        }" onclick="selectFolder()">📌 Chọn folder này làm nguồn</div>`;
 
-        filteredFolders.forEach((f) => {
-          list.innerHTML += `<div class="item" onclick="enterSourceFolder('${f.id}','${escapeHtml(f.name)}')" title="${escapeHtml(f.name)}"><div class="icon">📁</div>${escapeHtml(f.name)}</div>`;
-        });
+        allFolders
+          .filter((f) => !keyword || f.name.toLowerCase().includes(keyword))
+          .forEach((f) => {
+            list.innerHTML += `<div class="item" onclick="enterFolder('${f.id}','${f.name}')"><div class="icon">📁</div>${f.name}</div>`;
+          });
 
-        // Show count
-        document.getElementById("sourceFolderCount").textContent =
-          sourceAllFolders.length;
+        breadcrumb.textContent = folderStack.map((f) => f.name).join(" / ");
 
-        if (keyword && filteredFolders.length === 0) {
-          list.innerHTML +=
-            '<div class="item" style="pointer-events: none; opacity: 0.6;">Không tìm thấy folder nào</div>';
-        }
-
-        document.getElementById("breadcrumb").textContent = sourceFolderStack
-          .map((f) => f.name)
-          .join(" / ");
+        // Update file count
+        document.getElementById("fileCount").textContent = driveAssets.length;
       }
 
       function renderDestFolders() {
         const list = document.getElementById("destFolderList");
-        const searchInput = document.getElementById("destFolderSearch");
-        const keyword = (searchInput?.value || "").toLowerCase().trim();
-
-        // Filter folders
-        const filteredFolders = keyword
-          ? destAllFolders.filter((f) => f.name.toLowerCase().includes(keyword))
-          : destAllFolders;
-
+        const keyword = destFolderSearch.value.toLowerCase();
         list.innerHTML = "";
 
-        if (destFolderStack.length > 1) {
+        if (destFolderStack.length > 1)
           list.innerHTML += `<div class="item" onclick="goUpDest()"><div class="icon">↩</div>Quay lại</div>`;
-        }
 
         list.innerHTML += `<div class="item ${
-          destFolderId === destFolderStack.at(-1).id ? "active" : ""
+          destFolderId === destCurrentFolderId ? "active" : ""
         }" onclick="selectDestFolder()">📌 Chọn folder này làm đích</div>`;
 
-        filteredFolders.forEach((f) => {
-          list.innerHTML += `<div class="item" onclick="enterDestFolder('${f.id}','${escapeHtml(f.name)}')" title="${escapeHtml(f.name)}"><div class="icon">📁</div>${escapeHtml(f.name)}</div>`;
-        });
+        destAllFolders
+          .filter((f) => !keyword || f.name.toLowerCase().includes(keyword))
+          .forEach((f) => {
+            list.innerHTML += `<div class="item" onclick="enterDestFolder('${f.id}','${f.name}')"><div class="icon">📁</div>${f.name}</div>`;
+          });
 
-        // Show count
-        document.getElementById("destFolderCount").textContent =
-          destAllFolders.length;
-
-        if (keyword && filteredFolders.length === 0) {
-          list.innerHTML +=
-            '<div class="item" style="pointer-events: none; opacity: 0.6;">Không tìm thấy folder nào</div>';
-        }
-
-        document.getElementById("destBreadcrumb").textContent = destFolderStack
+        destBreadcrumb.textContent = destFolderStack
           .map((f) => f.name)
           .join(" / ");
       }
 
-      function renderFilePreview() {
-        const box = document.getElementById("filePreviewList");
+      function renderAssets() {
+        const box = document.getElementById("assetList");
         if (!box) return;
-
-        document.getElementById("fileCount").textContent = sourceFiles.length;
 
         box.innerHTML = "";
         const frag = document.createDocumentFragment();
 
-        sourceFiles.slice(0, 50).forEach((f) => {
-          // Limit to 50 for performance
+        driveAssets.slice(0, 50).forEach((f) => {
           const div = document.createElement("div");
           div.className = "asset-item";
 
@@ -673,11 +889,11 @@
           frag.appendChild(div);
         });
 
-        if (sourceFiles.length > 50) {
+        if (driveAssets.length > 50) {
           const more = document.createElement("div");
           more.className = "muted";
           more.style.padding = "10px";
-          more.textContent = `...và ${sourceFiles.length - 50} files nữa`;
+          more.textContent = `...và ${driveAssets.length - 50} files nữa`;
           frag.appendChild(more);
         }
 
@@ -698,20 +914,19 @@
         );
       }
 
-      function enterSourceFolder(id, name) {
-        sourceFolderStack.push({ id, name });
-        loadSourceFolders(id);
+      function enterFolder(id, name) {
+        folderStack.push({ id, name });
+        loadFolders(id);
       }
 
-      function goUpSource() {
-        sourceFolderStack.pop();
-        loadSourceFolders(sourceFolderStack.at(-1).id);
+      function goUp() {
+        folderStack.pop();
+        loadFolders(folderStack.at(-1).id);
       }
 
-      function selectSourceFolder() {
-        sourceFolderId = sourceFolderStack.at(-1).id;
-        document.getElementById("sourceFolder").textContent =
-          sourceFolderStack.at(-1).name;
+      function selectFolder() {
+        folderId = currentFolderId;
+        chosenFolder.textContent = folderStack.at(-1).name;
       }
 
       function enterDestFolder(id, name) {
@@ -725,22 +940,113 @@
       }
 
       function selectDestFolder() {
-        destFolderId = destFolderStack.at(-1).id;
-        document.getElementById("destFolder").textContent =
-          destFolderStack.at(-1).name;
+        destFolderId = destCurrentFolderId;
+        destFolder.textContent = destFolderStack.at(-1).name;
       }
 
       function clearSelection() {
-        sourceFolderId = null;
+        folderId = null;
         destFolderId = null;
-        document.getElementById("sourceFolder").textContent = "Chưa chọn";
-        document.getElementById("destFolder").textContent = "Chưa chọn";
-        document.getElementById("status").textContent = "🧹 Đã xóa lựa chọn";
-        document.getElementById("progressBar").style.width = "0%";
-        document.getElementById("progressBar").textContent = "0%";
+        driveAssets = [];
+        chosenFolder.textContent = "Chưa chọn";
+        destFolder.textContent = "Chưa chọn";
+        document.getElementById("fileCount").textContent = "0";
+        document.getElementById("loadedFoldersInfo").style.display = "none";
+        document.getElementById("sourceLinkInput").value = "";
+
+        // Clear subfolder cache
+        Object.keys(subfolderCache).forEach(
+          (key) => delete subfolderCache[key],
+        );
+        Object.keys(pendingSubfolders).forEach(
+          (key) => delete pendingSubfolders[key],
+        );
+
+        renderAssets();
+        status.textContent = "🧹 Đã xóa lựa chọn";
+        progressBar.style.width = "0%";
+        progressBar.textContent = "0%";
       }
 
-      async function copyFile(fileId, fileName, destFolderId) {
+      // Cache để lưu subfolder đã tạo (tên folder -> folder ID)
+      const subfolderCache = {};
+      // Pending promises để tránh race condition khi tạo folder đồng thời
+      const pendingSubfolders = {};
+
+      async function getOrCreateSubfolder(parentFolderId, folderName) {
+        // Check cache first
+        const cacheKey = `${parentFolderId}:${folderName}`;
+        if (subfolderCache[cacheKey]) {
+          return subfolderCache[cacheKey];
+        }
+
+        // Check if there's already a pending request for this folder
+        if (pendingSubfolders[cacheKey]) {
+          return await pendingSubfolders[cacheKey];
+        }
+
+        // Create promise for this folder
+        const promise = (async () => {
+          try {
+            // Check if subfolder already exists
+            const searchRes = await gapi.client.drive.files.list({
+              q: `name='${folderName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+              fields: "files(id,name)",
+              pageSize: 1,
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            });
+
+            if (searchRes.result.files && searchRes.result.files.length > 0) {
+              // Subfolder exists
+              const subfolderId = searchRes.result.files[0].id;
+              subfolderCache[cacheKey] = subfolderId;
+              return subfolderId;
+            }
+
+            // Create new subfolder
+            const createRes = await gapi.client.drive.files.create({
+              resource: {
+                name: folderName,
+                mimeType: "application/vnd.google-apps.folder",
+                parents: [parentFolderId],
+              },
+              fields: "id",
+            });
+
+            const subfolderId = createRes.result.id;
+            subfolderCache[cacheKey] = subfolderId;
+            return subfolderId;
+          } catch (error) {
+            console.error("Error creating subfolder:", error);
+            // Return parent folder if failed
+            return parentFolderId;
+          } finally {
+            // Remove from pending
+            delete pendingSubfolders[cacheKey];
+          }
+        })();
+
+        // Store pending promise
+        pendingSubfolders[cacheKey] = promise;
+        return await promise;
+      }
+
+      async function copyFile(
+        fileId,
+        fileName,
+        destFolderId,
+        sourceFolder = null,
+      ) {
+        // If sourceFolder is provided, create/get subfolder first
+        let targetFolderId = destFolderId;
+        if (sourceFolder && folderId === "multi-folder-mode") {
+          targetFolderId = await getOrCreateSubfolder(
+            destFolderId,
+            sourceFolder,
+          );
+        }
+
         const response = await fetch(
           `https://www.googleapis.com/drive/v3/files/${fileId}/copy`,
           {
@@ -751,7 +1057,7 @@
             },
             body: JSON.stringify({
               name: fileName,
-              parents: [destFolderId],
+              parents: [targetFolderId],
             }),
           },
         );
@@ -764,7 +1070,7 @@
       }
 
       async function startClone() {
-        if (!sourceFolderId) {
+        if (!folderId) {
           alert("Vui lòng chọn folder nguồn!");
           return;
         }
@@ -774,22 +1080,34 @@
           return;
         }
 
-        if (sourceFiles.length === 0) {
+        if (driveAssets.length === 0) {
           alert("Folder nguồn không có file nào!");
           return;
         }
 
-        const confirmMsg = `Bạn muốn clone ${sourceFiles.length} files từ:\n"${sourceFolderStack.at(-1).name}"\n\nSang:\n"${destFolderStack.at(-1).name}"\n\nTiếp tục?`;
+        // Build confirm message based on mode
+        let confirmMsg;
+        if (folderId === "multi-folder-mode") {
+          // Multi-folder mode
+          const folderNames = folderStack
+            .map((f) => `  • ${f.name}`)
+            .join("\n");
+          confirmMsg = `Bạn muốn clone ${driveAssets.length} files từ ${folderStack.length} folders:\n${folderNames}\n\nSang:\n"${destFolderStack.at(-1).name}"\n\nTiếp tục?`;
+        } else {
+          // Single folder mode
+          confirmMsg = `Bạn muốn clone ${driveAssets.length} files từ:\n"${folderStack.at(-1).name}"\n\nSang:\n"${destFolderStack.at(-1).name}"\n\nTiếp tục?`;
+        }
 
         if (!confirm(confirmMsg)) {
           return;
         }
 
-        document.getElementById("status").textContent = "Đang bắt đầu clone...";
+        status.textContent = "Đang bắt đầu clone...";
+        document.getElementById("loadedFoldersInfo").style.display = "none";
 
         const CONCURRENCY = 3;
         let done = 0;
-        const queue = [...sourceFiles];
+        const queue = [...driveAssets];
         const errors = [];
 
         async function worker() {
@@ -797,17 +1115,23 @@
             const file = queue.shift();
 
             try {
-              document.getElementById("status").textContent =
-                `Đang clone: ${file.name} (${done + 1}/${sourceFiles.length})`;
+              const displayName = file.sourceFolder
+                ? `${file.name} [từ ${file.sourceFolder}]`
+                : file.name;
 
-              await copyFile(file.id, file.name, destFolderId);
+              status.textContent = `Đang clone: ${displayName} (${done + 1}/${driveAssets.length})`;
+
+              await copyFile(
+                file.id,
+                file.name,
+                destFolderId,
+                file.sourceFolder,
+              );
 
               done++;
-              const percent = Math.round((done / sourceFiles.length) * 100);
-              document.getElementById("progressBar").style.width =
-                percent + "%";
-              document.getElementById("progressBar").textContent =
-                percent + "%";
+              const percent = Math.round((done / driveAssets.length) * 100);
+              progressBar.style.width = percent + "%";
+              progressBar.textContent = percent + "%";
             } catch (error) {
               console.error("Error copying file:", file.name, error);
               errors.push({ name: file.name, error: error.message });
@@ -818,16 +1142,11 @@
         await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
         if (errors.length > 0) {
-          document.getElementById("status").textContent =
-            `✅ Hoàn tất! Clone ${done}/${sourceFiles.length} files. ${errors.length} lỗi.`;
+          status.textContent = `✅ Hoàn tất! Clone ${done}/${driveAssets.length} files. ${errors.length} lỗi.`;
           console.log("Errors:", errors);
         } else {
-          document.getElementById("status").textContent =
-            `✅ Hoàn tất! Đã clone ${done} files thành công!`;
+          status.textContent = `✅ Hoàn tất! Đã clone ${done} files thành công!`;
         }
-
-        // Reload destination folder to see new files
-        await loadDestFolders(destFolderId);
       }
     </script>
   </body>
