@@ -266,8 +266,25 @@
       <h2>Clone Files từ Shared Drive → My Drive</h2>
 
       <div class="row">
-        <button class="primary" onclick="login()">🔐 Đăng nhập Google</button>
+        <button id="loginBtn" class="primary" onclick="login()" disabled>
+          ⏳ Đang tải...
+        </button>
         <span id="who" class="muted"></span>
+      </div>
+
+      <div
+        style="
+          margin-top: 8px;
+          padding: 8px 12px;
+          background: #fff3cd;
+          border-radius: 6px;
+          font-size: 12px;
+          color: #856404;
+        "
+      >
+        ⚠️ <b>Lưu ý:</b> Nếu bị crash khi đăng nhập, vui lòng dùng
+        <b>Chrome</b>, <b>Edge</b> hoặc <b>Firefox</b>. Trình duyệt Cốc Cốc có
+        thể không tương thích với Google API mới.
       </div>
 
       <div class="split">
@@ -353,38 +370,122 @@
       let destAllFolders = [];
 
       function initGapi() {
-        return new Promise((resolve) => {
-          gapi.load("client", async () => {
-            await gapi.client.init({
-              apiKey: API_KEY,
-              discoveryDocs: [DISCOVERY],
+        return new Promise((resolve, reject) => {
+          try {
+            if (typeof gapi === "undefined") {
+              reject(
+                new Error("Google API chưa load. Vui lòng refresh trang."),
+              );
+              return;
+            }
+            gapi.load("client", async () => {
+              try {
+                await gapi.client.init({
+                  apiKey: API_KEY,
+                  discoveryDocs: [DISCOVERY],
+                });
+                resolve();
+              } catch (error) {
+                reject(error);
+              }
             });
-            resolve();
-          });
+          } catch (error) {
+            reject(error);
+          }
         });
       }
 
       function login() {
-        const tc = google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          callback: async (t) => {
-            accessToken = t.access_token;
-            await initGapi();
-            gapi.client.setToken({ access_token: accessToken });
-            document.getElementById("who").textContent =
-              "✅ Đã kết nối Google Drive";
-            document.getElementById("folderSearch").disabled = false;
-            document.getElementById("destFolderSearch").disabled = false;
+        try {
+          // Kiểm tra xem Google API đã load chưa
+          if (typeof google === "undefined" || !google.accounts) {
+            alert(
+              "⚠️ Google API chưa sẵn sàng. Vui lòng:\n1. Kiểm tra kết nối internet\n2. Refresh lại trang\n3. Thử trình duyệt khác (Chrome, Edge, Firefox)\n\nLưu ý: Cốc Cốc có thể chặn Google API.",
+            );
+            return;
+          }
 
-            // Load source folders
-            await loadSourceFolders("root");
-            // Load destination folders
-            await loadDestFolders("root");
-          },
-        });
-        tc.requestAccessToken();
+          const tc = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: async (t) => {
+              try {
+                if (t.error) {
+                  document.getElementById("status").textContent =
+                    "❌ Lỗi: " + (t.error_description || t.error);
+                  return;
+                }
+
+                accessToken = t.access_token;
+                await initGapi();
+                gapi.client.setToken({ access_token: accessToken });
+                document.getElementById("who").textContent =
+                  "✅ Đã kết nối Google Drive";
+                document.getElementById("folderSearch").disabled = false;
+                document.getElementById("destFolderSearch").disabled = false;
+
+                // Load source folders
+                await loadSourceFolders("root");
+                // Load destination folders
+                await loadDestFolders("root");
+              } catch (error) {
+                console.error("Login callback error:", error);
+                document.getElementById("status").textContent =
+                  "❌ Lỗi kết nối: " + error.message;
+              }
+            },
+            error_callback: (error) => {
+              console.error("OAuth error:", error);
+              document.getElementById("status").textContent =
+                "❌ Lỗi đăng nhập: " +
+                (error.message || error.type || "Unknown error");
+            },
+          });
+
+          tc.requestAccessToken({ prompt: "" });
+        } catch (error) {
+          console.error("Login error:", error);
+          alert(
+            "❌ Lỗi khi đăng nhập:\n" +
+              error.message +
+              "\n\nĐề xuất:\n- Thử trình duyệt Chrome hoặc Edge\n- Kiểm tra popup không bị chặn\n- Clear cache và thử lại",
+          );
+        }
       }
+
+      // Kiểm tra Google API load status
+      function checkApiReady() {
+        const loginBtn = document.getElementById("loginBtn");
+        const statusEl = document.getElementById("status");
+
+        let checkCount = 0;
+        const maxChecks = 20; // 10 giây
+
+        const checkInterval = setInterval(() => {
+          checkCount++;
+
+          if (
+            typeof google !== "undefined" &&
+            google.accounts &&
+            typeof gapi !== "undefined"
+          ) {
+            clearInterval(checkInterval);
+            loginBtn.disabled = false;
+            loginBtn.textContent = "🔐 Đăng nhập Google";
+            if (statusEl) statusEl.textContent = "✅ Sẵn sàng đăng nhập";
+          } else if (checkCount >= maxChecks) {
+            clearInterval(checkInterval);
+            loginBtn.disabled = false;
+            loginBtn.textContent = "⚠️ Thử đăng nhập";
+            if (statusEl)
+              statusEl.textContent =
+                "⚠️ API tải chậm. Nếu crash, vui lòng dùng Chrome/Edge.";
+          }
+        }, 500);
+      }
+
+      // Chạy kiểm tra khi trang load xong
+      window.addEventListener("load", checkApiReady);
 
       async function loadSourceFolders(parentId) {
         const currentFolderId = parentId;
