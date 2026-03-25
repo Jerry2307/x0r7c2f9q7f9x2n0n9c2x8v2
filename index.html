@@ -301,10 +301,11 @@
           <div class="muted">
             Folder nguồn (sẽ clone): <b id="sourceFolder">Chưa chọn</b>
           </div>
-          <div id="folderList" class="list"></div>
-          <div class="muted" style="margin-top: 10px">
-            Files trong folder: <b id="fileCount">0</b> files
+          <div class="muted" style="margin-bottom: 8px">
+            📁 <b id="sourceFolderCount">0</b> folders | 📄
+            <b id="fileCount">0</b> files
           </div>
+          <div id="folderList" class="list"></div>
 
           <div
             id="filePreviewList"
@@ -324,6 +325,9 @@
             disabled
           />
           <div class="muted">Folder đích: <b id="destFolder">Chưa chọn</b></div>
+          <div class="muted" style="margin-bottom: 8px">
+            📁 <b id="destFolderCount">0</b> folders trong My Drive
+          </div>
           <div id="destFolderList" class="list"></div>
 
           <button
@@ -493,6 +497,12 @@
         sourceFiles = [];
         let pageToken = null;
 
+        // Show loading state
+        document.getElementById("folderList").innerHTML =
+          '<div class="item" style="pointer-events: none;"><div class="icon">⏳</div>Đang tải folders...</div>';
+        document.getElementById("status").textContent =
+          "Đang tải danh sách folders...";
+
         do {
           const res = await gapi.client.drive.files.list({
             q:
@@ -521,12 +531,18 @@
         sourceFolderStack[sourceFolderStack.length - 1].id = currentFolderId;
         renderFolders();
         renderFilePreview();
+        document.getElementById("status").textContent =
+          `✅ Đã tải ${sourceAllFolders.length} folders và ${sourceFiles.length} files`;
       }
 
       async function loadDestFolders(parentId) {
         const currentFolderId = parentId;
         destAllFolders = [];
         let pageToken = null;
+
+        // Show loading state
+        document.getElementById("destFolderList").innerHTML =
+          '<div class="item" style="pointer-events: none;"><div class="icon">⏳</div>Đang tải folders...</div>';
 
         do {
           const res = await gapi.client.drive.files.list({
@@ -550,9 +566,16 @@
 
       function renderFolders() {
         const list = document.getElementById("folderList");
-        const keyword = (
-          document.getElementById("folderSearch").value || ""
-        ).toLowerCase();
+        const searchInput = document.getElementById("folderSearch");
+        const keyword = (searchInput?.value || "").toLowerCase().trim();
+
+        // Filter folders
+        const filteredFolders = keyword
+          ? sourceAllFolders.filter((f) =>
+              f.name.toLowerCase().includes(keyword),
+            )
+          : sourceAllFolders;
+
         list.innerHTML = "";
 
         if (sourceFolderStack.length > 1) {
@@ -563,11 +586,18 @@
           sourceFolderId === sourceFolderStack.at(-1).id ? "active" : ""
         }" onclick="selectSourceFolder()">📌 Chọn folder này làm nguồn</div>`;
 
-        sourceAllFolders
-          .filter((f) => !keyword || f.name.toLowerCase().includes(keyword))
-          .forEach((f) => {
-            list.innerHTML += `<div class="item" onclick="enterSourceFolder('${f.id}','${escapeHtml(f.name)}')"><div class="icon">📁</div>${escapeHtml(f.name)}</div>`;
-          });
+        filteredFolders.forEach((f) => {
+          list.innerHTML += `<div class="item" onclick="enterSourceFolder('${f.id}','${escapeHtml(f.name)}')" title="${escapeHtml(f.name)}"><div class="icon">📁</div>${escapeHtml(f.name)}</div>`;
+        });
+
+        // Show count
+        document.getElementById("sourceFolderCount").textContent =
+          sourceAllFolders.length;
+
+        if (keyword && filteredFolders.length === 0) {
+          list.innerHTML +=
+            '<div class="item" style="pointer-events: none; opacity: 0.6;">Không tìm thấy folder nào</div>';
+        }
 
         document.getElementById("breadcrumb").textContent = sourceFolderStack
           .map((f) => f.name)
@@ -576,9 +606,14 @@
 
       function renderDestFolders() {
         const list = document.getElementById("destFolderList");
-        const keyword = (
-          document.getElementById("destFolderSearch").value || ""
-        ).toLowerCase();
+        const searchInput = document.getElementById("destFolderSearch");
+        const keyword = (searchInput?.value || "").toLowerCase().trim();
+
+        // Filter folders
+        const filteredFolders = keyword
+          ? destAllFolders.filter((f) => f.name.toLowerCase().includes(keyword))
+          : destAllFolders;
+
         list.innerHTML = "";
 
         if (destFolderStack.length > 1) {
@@ -589,11 +624,18 @@
           destFolderId === destFolderStack.at(-1).id ? "active" : ""
         }" onclick="selectDestFolder()">📌 Chọn folder này làm đích</div>`;
 
-        destAllFolders
-          .filter((f) => !keyword || f.name.toLowerCase().includes(keyword))
-          .forEach((f) => {
-            list.innerHTML += `<div class="item" onclick="enterDestFolder('${f.id}','${escapeHtml(f.name)}')"><div class="icon">📁</div>${escapeHtml(f.name)}</div>`;
-          });
+        filteredFolders.forEach((f) => {
+          list.innerHTML += `<div class="item" onclick="enterDestFolder('${f.id}','${escapeHtml(f.name)}')" title="${escapeHtml(f.name)}"><div class="icon">📁</div>${escapeHtml(f.name)}</div>`;
+        });
+
+        // Show count
+        document.getElementById("destFolderCount").textContent =
+          destAllFolders.length;
+
+        if (keyword && filteredFolders.length === 0) {
+          list.innerHTML +=
+            '<div class="item" style="pointer-events: none; opacity: 0.6;">Không tìm thấy folder nào</div>';
+        }
 
         document.getElementById("destBreadcrumb").textContent = destFolderStack
           .map((f) => f.name)
