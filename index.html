@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Clone Files từ Shared Drive → My Drive</title>
+
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f5f6fa;
+        padding: 30px;
+      }
+      .container {
+        max-width: 980px;
+        margin: auto;
+        background: #fff;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+      }
+      h2 {
+        margin-top: 0;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      button {
+        padding: 10px 14px;
+        cursor: pointer;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+        background: #fff;
+      }
+      button.primary {
+        background: #4facfe;
+        color: #fff;
+        border: none;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      .panel {
+        border: 1px solid #eee;
+        border-radius: 12px;
+        padding: 12px;
+        background: #fafafa;
+      }
+      .panel h3 {
+        margin: 0 0 10px;
+        font-size: 14px;
+      }
+
+      .breadcrumb {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 8px;
+      }
+
+      .search {
+        width: 87%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        margin-bottom: 8px;
+      }
+
+      .list {
+        max-height: 360px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .item {
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #e9e9e9;
+        background: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .item:hover {
+        background: #f2f7ff;
+      }
+      .item.active {
+        background: #eaf3ff;
+        border-color: #b7d6ff;
+      }
+
+      .icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        background: #eee;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+      }
+
+      .muted {
+        font-size: 12px;
+        color: #777;
+      }
+
+      /* Preview */
+      .preview {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
+        margin-bottom: 50px;
+      }
+      .preview-item {
+        position: relative;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        padding: 6px;
+        background: #fff;
+
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+
+        min-height: 160px; /* 🔥 quan trọng */
+      }
+
+      .preview-item img {
+        width: 100%;
+        height: 90px;
+        object-fit: cover;
+        border-radius: 6px;
+      }
+      .preview-remove {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .preview-name {
+        font-size: 12px;
+        margin-top: 6px;
+        line-height: 1.3;
+
+        /* xuống dòng nhưng giới hạn */
+        display: -webkit-box;
+        -webkit-line-clamp: 2; /* tối đa 2 dòng */
+        -webkit-box-orient: vertical;
+
+        overflow: hidden;
+        word-break: break-word;
+      }
+
+      .progress {
+        width: 100%;
+        background: #ddd;
+        height: 18px;
+        border-radius: 999px;
+        margin-top: 10px;
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #4facfe, #00f2fe);
+        font-size: 11px;
+        line-height: 18px;
+        text-align: center;
+        color: #000;
+      }
+
+      /* Drag drop */
+      #dropzone {
+        margin-top: 16px;
+        padding: 40px;
+        min-height: 300px;
+        border: 2px dashed #4facfe;
+        border-radius: 16px;
+        text-align: center;
+        background: linear-gradient(180deg, #f6fbff, #eef6ff);
+        cursor: pointer;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+      }
+      #dropzone:hover {
+        background: #eaf5ff;
+        border-color: #2f8cff;
+      }
+
+      .asset-item {
+        position: relative;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        padding: 6px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .asset-item:hover {
+        outline: 2px solid #4facfe;
+        border-color: #4facfe;
+      }
+      .asset-item img {
+        width: 100%;
+        height: 90px;
+        object-fit: cover;
+        border-radius: 6px;
+      }
+      .asset-badge {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        font-size: 11px;
+        background: rgba(0, 0, 0, 0.65);
+        color: #fff;
+        padding: 2px 6px;
+        border-radius: 999px;
+      }
+
+      .asset-del {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        border: 1px solid #ddd;
+        background: #fff;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 5px;
+        display: grid;
+        place-items: center;
+      }
+      .asset-del:hover {
+        border-color: #ff5b5b;
+        color: #ff5b5b;
+      }
+      /* Scroll cho asset trong folder */
+      #assetList {
+        max-height: 420px; /* chỉnh cao thấp tuỳ ý */
+        overflow-y: auto;
+        padding-right: 6px; /* chừa chỗ scrollbar */
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h2>Clone Files từ Shared Drive → My Drive</h2>
+
+      <div class="row">
+        <button class="primary" onclick="login()">🔐 Đăng nhập Google</button>
+        <span id="who" class="muted"></span>
+      </div>
+
+      <div class="split">
+        <div class="panel">
+          <h3>Shared Drive / Folder nguồn</h3>
+          <div id="breadcrumb" class="breadcrumb">My Drive</div>
+          <input
+            id="folderSearch"
+            class="search"
+            placeholder="Tìm thư mục..."
+            oninput="renderFolders()"
+            disabled
+          />
+          <div class="muted">
+            Folder nguồn (sẽ clone): <b id="sourceFolder">Chưa chọn</b>
+          </div>
+          <div id="folderList" class="list"></div>
+          <div class="muted" style="margin-top: 10px">
+            Files trong folder: <b id="fileCount">0</b> files
+          </div>
+
+          <div
+            id="filePreviewList"
+            class="preview"
+            style="margin-top: 8px"
+          ></div>
+        </div>
+
+        <div class="panel">
+          <h3>Folder đích (My Drive)</h3>
+          <div id="destBreadcrumb" class="breadcrumb">My Drive</div>
+          <input
+            id="destFolderSearch"
+            class="search"
+            placeholder="Tìm thư mục đích..."
+            oninput="renderDestFolders()"
+            disabled
+          />
+          <div class="muted">Folder đích: <b id="destFolder">Chưa chọn</b></div>
+          <div id="destFolderList" class="list"></div>
+
+          <button
+            class="primary"
+            onclick="startClone()"
+            style="margin-top: 20px"
+          >
+            🚀 Clone tất cả files
+          </button>
+          <button onclick="clearSelection()">🧹 Clear</button>
+
+          <div class="progress">
+            <div id="progressBar" class="progress-bar">0%</div>
+          </div>
+          <div id="status" class="muted">Chưa có thao tác</div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+
+    <script>
+      const CLIENT_ID =
+        "860632481172-1nnq4dparmjdqrrehh407uv33ppvu2b7.apps.googleusercontent.com";
+      const API_KEY = "AIzaSyC6aOoJLRvkAmOn8MVtsu6yPO-mzK3AR3U";
+      const SCOPES =
+        "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file";
+
+      const DISCOVERY =
+        "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
+
+      let accessToken = null;
+
+      // Source folder (shared drive / any folder)
+      let sourceFolderId = null;
+      let sourceFolderStack = [{ id: "root", name: "My Drive" }];
+      let sourceAllFolders = [];
+      let sourceFiles = [];
+
+      // Destination folder (My Drive)
+      let destFolderId = null;
+      let destFolderStack = [{ id: "root", name: "My Drive" }];
+      let destAllFolders = [];
+
+      function initGapi() {
+        return new Promise((resolve) => {
+          gapi.load("client", async () => {
+            await gapi.client.init({
+              apiKey: API_KEY,
+              discoveryDocs: [DISCOVERY],
+            });
+            resolve();
+          });
+        });
+      }
+
+      function login() {
+        const tc = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: async (t) => {
+            accessToken = t.access_token;
+            await initGapi();
+            gapi.client.setToken({ access_token: accessToken });
+            document.getElementById("who").textContent =
+              "✅ Đã kết nối Google Drive";
+            document.getElementById("folderSearch").disabled = false;
+            document.getElementById("destFolderSearch").disabled = false;
+
+            // Load source folders
+            await loadSourceFolders("root");
+            // Load destination folders
+            await loadDestFolders("root");
+          },
+        });
+        tc.requestAccessToken();
+      }
+
+      async function loadSourceFolders(parentId) {
+        const currentFolderId = parentId;
+        sourceAllFolders = [];
+        sourceFiles = [];
+        let pageToken = null;
+
+        do {
+          const res = await gapi.client.drive.files.list({
+            q:
+              parentId === "root"
+                ? "trashed=false"
+                : `trashed=false and '${parentId}' in parents`,
+            fields:
+              "nextPageToken, files(id,name,mimeType,thumbnailLink,iconLink,size,webViewLink)",
+            pageSize: 1000,
+            pageToken,
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+          });
+
+          (res.result.files || []).forEach((f) => {
+            if (f.mimeType === "application/vnd.google-apps.folder") {
+              sourceAllFolders.push(f);
+            } else {
+              sourceFiles.push(f);
+            }
+          });
+
+          pageToken = res.result.nextPageToken;
+        } while (pageToken);
+
+        sourceFolderStack[sourceFolderStack.length - 1].id = currentFolderId;
+        renderFolders();
+        renderFilePreview();
+      }
+
+      async function loadDestFolders(parentId) {
+        const currentFolderId = parentId;
+        destAllFolders = [];
+        let pageToken = null;
+
+        do {
+          const res = await gapi.client.drive.files.list({
+            q:
+              parentId === "root"
+                ? "trashed=false and mimeType='application/vnd.google-apps.folder'"
+                : `trashed=false and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder'`,
+            fields: "nextPageToken, files(id,name,mimeType)",
+            pageSize: 1000,
+            pageToken,
+            supportsAllDrives: false, // Only My Drive for destination
+          });
+
+          destAllFolders = res.result.files || [];
+          pageToken = res.result.nextPageToken;
+        } while (pageToken);
+
+        destFolderStack[destFolderStack.length - 1].id = currentFolderId;
+        renderDestFolders();
+      }
+
+      function renderFolders() {
+        const list = document.getElementById("folderList");
+        const keyword = (
+          document.getElementById("folderSearch").value || ""
+        ).toLowerCase();
+        list.innerHTML = "";
+
+        if (sourceFolderStack.length > 1) {
+          list.innerHTML += `<div class="item" onclick="goUpSource()"><div class="icon">↩</div>Quay lại</div>`;
+        }
+
+        list.innerHTML += `<div class="item ${
+          sourceFolderId === sourceFolderStack.at(-1).id ? "active" : ""
+        }" onclick="selectSourceFolder()">📌 Chọn folder này làm nguồn</div>`;
+
+        sourceAllFolders
+          .filter((f) => !keyword || f.name.toLowerCase().includes(keyword))
+          .forEach((f) => {
+            list.innerHTML += `<div class="item" onclick="enterSourceFolder('${f.id}','${escapeHtml(f.name)}')"><div class="icon">📁</div>${escapeHtml(f.name)}</div>`;
+          });
+
+        document.getElementById("breadcrumb").textContent = sourceFolderStack
+          .map((f) => f.name)
+          .join(" / ");
+      }
+
+      function renderDestFolders() {
+        const list = document.getElementById("destFolderList");
+        const keyword = (
+          document.getElementById("destFolderSearch").value || ""
+        ).toLowerCase();
+        list.innerHTML = "";
+
+        if (destFolderStack.length > 1) {
+          list.innerHTML += `<div class="item" onclick="goUpDest()"><div class="icon">↩</div>Quay lại</div>`;
+        }
+
+        list.innerHTML += `<div class="item ${
+          destFolderId === destFolderStack.at(-1).id ? "active" : ""
+        }" onclick="selectDestFolder()">📌 Chọn folder này làm đích</div>`;
+
+        destAllFolders
+          .filter((f) => !keyword || f.name.toLowerCase().includes(keyword))
+          .forEach((f) => {
+            list.innerHTML += `<div class="item" onclick="enterDestFolder('${f.id}','${escapeHtml(f.name)}')"><div class="icon">📁</div>${escapeHtml(f.name)}</div>`;
+          });
+
+        document.getElementById("destBreadcrumb").textContent = destFolderStack
+          .map((f) => f.name)
+          .join(" / ");
+      }
+
+      function renderFilePreview() {
+        const box = document.getElementById("filePreviewList");
+        if (!box) return;
+
+        document.getElementById("fileCount").textContent = sourceFiles.length;
+
+        box.innerHTML = "";
+        const frag = document.createDocumentFragment();
+
+        sourceFiles.slice(0, 50).forEach((f) => {
+          // Limit to 50 for performance
+          const div = document.createElement("div");
+          div.className = "asset-item";
+
+          const img = document.createElement("img");
+          img.loading = "lazy";
+
+          if (f.mimeType && f.mimeType.startsWith("image/")) {
+            img.src = f.thumbnailLink || f.iconLink || "";
+          } else {
+            img.src = f.iconLink || "";
+          }
+
+          const name = document.createElement("div");
+          name.className = "preview-name";
+          name.textContent = f.name;
+
+          div.append(img, name);
+          frag.appendChild(div);
+        });
+
+        if (sourceFiles.length > 50) {
+          const more = document.createElement("div");
+          more.className = "muted";
+          more.style.padding = "10px";
+          more.textContent = `...và ${sourceFiles.length - 50} files nữa`;
+          frag.appendChild(more);
+        }
+
+        box.appendChild(frag);
+      }
+
+      function escapeHtml(str) {
+        return String(str).replace(
+          /[&<>"']/g,
+          (m) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#039;",
+            })[m],
+        );
+      }
+
+      function enterSourceFolder(id, name) {
+        sourceFolderStack.push({ id, name });
+        loadSourceFolders(id);
+      }
+
+      function goUpSource() {
+        sourceFolderStack.pop();
+        loadSourceFolders(sourceFolderStack.at(-1).id);
+      }
+
+      function selectSourceFolder() {
+        sourceFolderId = sourceFolderStack.at(-1).id;
+        document.getElementById("sourceFolder").textContent =
+          sourceFolderStack.at(-1).name;
+      }
+
+      function enterDestFolder(id, name) {
+        destFolderStack.push({ id, name });
+        loadDestFolders(id);
+      }
+
+      function goUpDest() {
+        destFolderStack.pop();
+        loadDestFolders(destFolderStack.at(-1).id);
+      }
+
+      function selectDestFolder() {
+        destFolderId = destFolderStack.at(-1).id;
+        document.getElementById("destFolder").textContent =
+          destFolderStack.at(-1).name;
+      }
+
+      function clearSelection() {
+        sourceFolderId = null;
+        destFolderId = null;
+        document.getElementById("sourceFolder").textContent = "Chưa chọn";
+        document.getElementById("destFolder").textContent = "Chưa chọn";
+        document.getElementById("status").textContent = "🧹 Đã xóa lựa chọn";
+        document.getElementById("progressBar").style.width = "0%";
+        document.getElementById("progressBar").textContent = "0%";
+      }
+
+      async function copyFile(fileId, fileName, destFolderId) {
+        const response = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${fileId}/copy`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + accessToken,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: fileName,
+              parents: [destFolderId],
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to copy ${fileName}`);
+        }
+
+        return await response.json();
+      }
+
+      async function startClone() {
+        if (!sourceFolderId) {
+          alert("Vui lòng chọn folder nguồn!");
+          return;
+        }
+
+        if (!destFolderId) {
+          alert("Vui lòng chọn folder đích!");
+          return;
+        }
+
+        if (sourceFiles.length === 0) {
+          alert("Folder nguồn không có file nào!");
+          return;
+        }
+
+        const confirmMsg = `Bạn muốn clone ${sourceFiles.length} files từ:\n"${sourceFolderStack.at(-1).name}"\n\nSang:\n"${destFolderStack.at(-1).name}"\n\nTiếp tục?`;
+
+        if (!confirm(confirmMsg)) {
+          return;
+        }
+
+        document.getElementById("status").textContent = "Đang bắt đầu clone...";
+
+        const CONCURRENCY = 3;
+        let done = 0;
+        const queue = [...sourceFiles];
+        const errors = [];
+
+        async function worker() {
+          while (queue.length) {
+            const file = queue.shift();
+
+            try {
+              document.getElementById("status").textContent =
+                `Đang clone: ${file.name} (${done + 1}/${sourceFiles.length})`;
+
+              await copyFile(file.id, file.name, destFolderId);
+
+              done++;
+              const percent = Math.round((done / sourceFiles.length) * 100);
+              document.getElementById("progressBar").style.width =
+                percent + "%";
+              document.getElementById("progressBar").textContent =
+                percent + "%";
+            } catch (error) {
+              console.error("Error copying file:", file.name, error);
+              errors.push({ name: file.name, error: error.message });
+            }
+          }
+        }
+
+        await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+        if (errors.length > 0) {
+          document.getElementById("status").textContent =
+            `✅ Hoàn tất! Clone ${done}/${sourceFiles.length} files. ${errors.length} lỗi.`;
+          console.log("Errors:", errors);
+        } else {
+          document.getElementById("status").textContent =
+            `✅ Hoàn tất! Đã clone ${done} files thành công!`;
+        }
+
+        // Reload destination folder to see new files
+        await loadDestFolders(destFolderId);
+      }
+    </script>
+  </body>
+</html>
